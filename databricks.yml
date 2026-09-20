@@ -11,4 +11,4 @@ targets:
   prod:
     mode: production
     workspace:
-      root_path: /Workspace/Users/alleanna.villan@ftwfoundation.org/.bundle/${bundle.name}/${bundle.target}
+      root_path: /Workspace/Users/sara.celadina@ftwfoundation.org/.bundle/${bundle.name}/${bundle.target}
