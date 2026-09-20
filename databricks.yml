@@ -11,4 +11,6 @@ targets:
   prod:
     mode: production
     workspace:
+      profile: sara.celadina@ftwfoundation.org
       root_path: /Workspace/Users/sara.celadina@ftwfoundation.org/.bundle/${bundle.name}/${bundle.target}
+    
