@@ -28,7 +28,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/00_setup/00_init_schemas.sql
-            warehouse_id: 0a4e428755b887d4
+            warehouse_id: 8414776a94d0039f
             
 
         - task_key: download_green_taxi
@@ -113,7 +113,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/02_silver_clean/clean_green_taxi.sql
-            warehouse_id: 0a4e428755b887d4
+            warehouse_id: 8414776a94d0039f
 
 
         - task_key: clean_taxi_zones
@@ -124,7 +124,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/02_silver_clean/clean_taxi_zones.sql
-            warehouse_id: 0a4e428755b887d4
+            warehouse_id: 8414776a94d0039f
 
 
         - task_key: clean_weather
@@ -135,7 +135,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/02_silver_clean/clean_weather.sql
-            warehouse_id: 0a4e428755b887d4
+            warehouse_id: 8414776a94d0039f
 
 
         # ==========================================
@@ -150,7 +150,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/03_gold_model/dim_datetime.sql
-            warehouse_id: 0a4e428755b887d4
+            warehouse_id: 8414776a94d0039f
 
 
         - task_key: dim_location
@@ -161,7 +161,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/03_gold_model/dim_location.sql
-            warehouse_id: 0a4e428755b887d4
+            warehouse_id: 8414776a94d0039f
 
 
         - task_key: dim_weather
@@ -172,7 +172,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/03_gold_model/dim_weather.sql
-            warehouse_id: 0a4e428755b887d4
+            warehouse_id: 8414776a94d0039f
 
 
         - task_key: fact_taxi_trip
@@ -186,7 +186,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/03_gold_model/fact_taxi_trip.sql
-            warehouse_id: 0a4e428755b887d4
+            warehouse_id: 8414776a94d0039f
 
 
         # ==========================================
@@ -201,7 +201,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/05_analytics/taxi_demand.sql
-            warehouse_id: 0a4e428755b887d4
+            warehouse_id: 8414776a94d0039f
 
 
         - task_key: weather_demand_trip_behavior
@@ -212,7 +212,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/05_analytics/weather_demand_trip_behavior.sql
-            warehouse_id: 0a4e428755b887d4
+            warehouse_id: 8414776a94d0039f
 
 
         - task_key: strongest_mobility_patterns
@@ -223,4 +223,4 @@ resources:
           sql_task:
             file:
               path: ../src/sql/05_analytics/strongest_mobility_patterns.sql
-            warehouse_id: 0a4e428755b887d4
+            warehouse_id: 8414776a94d0039f
