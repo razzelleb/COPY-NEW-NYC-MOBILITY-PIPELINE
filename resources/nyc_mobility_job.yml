@@ -29,23 +29,12 @@ resources:
             file:
               path: ../src/sql/00_setup/00_init_schemas.sql
             warehouse_id: 0a4e428755b887d4
-
-
-        - task_key: volume_creation
-
-          depends_on:
-            - task_key: init_schemas
-
-          environment_key: default
-
-          spark_python_task:
-            python_file: ../src/sql/00_setup/volume_creation.py
-
+            
 
         - task_key: download_green_taxi
 
           depends_on:
-            - task_key: volume_creation
+            - task_key: init_schemas
 
           environment_key: default
 
