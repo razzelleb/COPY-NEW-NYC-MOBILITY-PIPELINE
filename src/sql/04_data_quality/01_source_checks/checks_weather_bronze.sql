@@ -111,4 +111,4 @@ checks AS (
 
 SELECT *
 FROM checks
-ORDER BY check_name;
+ORDER BY check_name DESC;
