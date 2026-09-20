@@ -45,7 +45,7 @@ resources:
         - task_key: download_open_meteo
 
           depends_on:
-            - task_key: volume_creation
+            - task_key: init_schemas
 
           environment_key: default
 
@@ -56,7 +56,7 @@ resources:
         - task_key: download_taxi_zones
 
           depends_on:
-            - task_key: volume_creation
+            - task_key: init_schemas
 
           environment_key: default
 
