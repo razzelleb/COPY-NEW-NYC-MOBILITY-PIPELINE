@@ -13,6 +13,13 @@ resources:
           spec:
             environment_version: "2"
 
+        - environment_key: dlt_env
+          spec:
+            environment_version: "2"
+            dependencies:
+              - dlt[databricks]
+              - dlt[parquet]
+
       # ==========================================
       # PIPELINE TASKS
       # ==========================================
@@ -28,7 +35,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/00_setup/00_init_schemas.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 0a4e428755b887d4
             
 
         - task_key: download_green_taxi
@@ -113,7 +120,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/02_silver_clean/clean_green_taxi.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 0a4e428755b887d4
 
 
         - task_key: clean_taxi_zones
@@ -124,7 +131,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/02_silver_clean/clean_taxi_zones.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 0a4e428755b887d4
 
 
         - task_key: clean_weather
@@ -135,7 +142,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/02_silver_clean/clean_weather.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 0a4e428755b887d4
 
 
         # ==========================================
@@ -150,7 +157,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/03_gold_model/dim_datetime.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 0a4e428755b887d4
 
 
         - task_key: dim_location
@@ -161,7 +168,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/03_gold_model/dim_location.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 0a4e428755b887d4
 
 
         - task_key: dim_weather
@@ -172,7 +179,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/03_gold_model/dim_weather.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 0a4e428755b887d4
 
 
         - task_key: fact_taxi_trip
@@ -186,7 +193,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/03_gold_model/fact_taxi_trip.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 0a4e428755b887d4
 
 
         # ==========================================
@@ -201,7 +208,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/05_analytics/taxi_demand.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 0a4e428755b887d4
 
 
         - task_key: weather_demand_trip_behavior
@@ -212,7 +219,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/05_analytics/weather_demand_trip_behavior.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 0a4e428755b887d4
 
 
         - task_key: strongest_mobility_patterns
@@ -223,4 +230,42 @@ resources:
           sql_task:
             file:
               path: ../src/sql/05_analytics/strongest_mobility_patterns.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 0a4e428755b887d4
+
+
+        # ==========================================
+        # EVALUATION TRACK - dlt-based weather ingestion
+        # (parallel to the existing open-meteo chain, does not feed fact_taxi_trip)
+        # ==========================================
+
+        - task_key: dlt_ingest_weather
+
+          depends_on:
+            - task_key: init_schemas
+
+          environment_key: dlt_env
+
+          spark_python_task:
+            python_file: ../src/sql/01_bronze_ingest/dlt_ingest_weather.py
+
+
+        - task_key: clean_weather_dlt
+
+          depends_on:
+            - task_key: dlt_ingest_weather
+
+          sql_task:
+            file:
+              path: ../src/sql/02_silver_clean/clean_weather_dlt.sql
+            warehouse_id: 0a4e428755b887d4
+
+
+        - task_key: dim_weather_dlt
+
+          depends_on:
+            - task_key: clean_weather_dlt
+
+          sql_task:
+            file:
+              path: ../src/sql/03_gold_model/dim_weather_dlt.sql
+            warehouse_id: 0a4e428755b887d4

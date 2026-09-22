@@ -1,6 +1,26 @@
+import os
+
 import dlt
 import requests
 import pendulum
+
+try:
+    dbutils
+except NameError:
+    pass  # running locally: dlt reads credentials from .dlt/secrets.toml
+else:
+    # running as a Databricks job task: no .dlt/secrets.toml on the cluster,
+    # so populate the env vars dlt's databricks destination reads instead
+    os.environ["DESTINATION__DATABRICKS__CREDENTIALS__SERVER_HOSTNAME"] = dbutils.secrets.get(
+        scope="dlt-weather", key="server-hostname"
+    )
+    os.environ["DESTINATION__DATABRICKS__CREDENTIALS__HTTP_PATH"] = dbutils.secrets.get(
+        scope="dlt-weather", key="http-path"
+    )
+    os.environ["DESTINATION__DATABRICKS__CREDENTIALS__ACCESS_TOKEN"] = dbutils.secrets.get(
+        scope="dlt-weather", key="access-token"
+    )
+    os.environ["DESTINATION__DATABRICKS__CREDENTIALS__CATALOG"] = "nyc"
 
 BASE_URL = "https://archive-api.open-meteo.com/v1/archive"
 
