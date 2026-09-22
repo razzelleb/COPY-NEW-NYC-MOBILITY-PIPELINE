@@ -1,21 +1,43 @@
 import dlt
-from pathlib import Path
-from datetime import datetime
-import pandas as pd
-from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
 
-# Initialize Spark Session & enable Delta schema auto-merge
-spark = SparkSession.builder.getOrCreate()
-spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
+# =====================================================================
+# GREEN TAXI BRONZE INGESTION (DELTA LIVE TABLES - PYSPARK)
+# =====================================================================
 
-# Volume path containing raw Parquet files
-VOLUME_PATH = Path("/Volumes/nyc/default/nyc-mobility-volume/green_taxi/")
+# 1. Temporary Staging Table (Internal stream; NOT published to Unity Catalog)
+@dlt.table(
+    name="green_taxi_raw_staging",
+    temporary=True,
+    comment="Internal streaming staging table for raw Green Taxi Parquet files"
+)
+def green_taxi_raw_staging():
+    return (
+        spark.readStream
+        .format("cloudFiles")
+        .option("cloudFiles.format", "parquet")
+        .option("cloudFiles.schemaLocation", "/Volumes/nyc/default/nyc-mobility-volume/_schemas/green_taxi")
+        .load("/Volumes/nyc/default/nyc-mobility-volume/green_taxi/")
+        .select(
+            "*",
+            F.col("_metadata.file_name").alias("source_file"),
+            F.date_format(F.col("lpep_pickup_datetime"), "yyyy-MM").alias("source_month"),
+            F.current_timestamp().alias("bronze_ingestion_timestamp"),
+            F.current_date().alias("bronze_ingestion_date")
+        )
+    )
 
-# Define dlt resource with MERGE write disposition and 7-column composite primary key
-@dlt.resource(
+# 2. Target Streaming Table Declaration (nyc.nyc_bronze.green_taxi_bronze)
+dlt.create_streaming_table(
     name="green_taxi_bronze",
-    write_disposition="merge",
-    primary_key=[
+    comment="Idempotent Bronze Green Taxi table deduplicated by composite natural key"
+)
+
+# 3. Idempotent CDC Upsert (Guarantees safe reruns with 0 duplicates)
+dlt.apply_changes(
+    target="green_taxi_bronze",
+    source="green_taxi_raw_staging",
+    keys=[
         "VendorID",
         "lpep_pickup_datetime",
         "lpep_dropoff_datetime",
@@ -23,47 +45,7 @@ VOLUME_PATH = Path("/Volumes/nyc/default/nyc-mobility-volume/green_taxi/")
         "DOLocationID",
         "trip_distance",
         "total_amount"
-    ]
+    ],
+    sequence_by="bronze_ingestion_timestamp",
+    stored_as_scd_type="1"
 )
-def green_taxi_resource(selected_month=None):
-    """
-    Reads Green Taxi Parquet files from the volume and appends bronze lineage metadata.
-    Pass selected_month (e.g., '2026-03') to load a specific month for incremental testing.
-    """
-    pattern = f"green_tripdata_{selected_month}.parquet" if selected_month else "*.parquet"
-    files = list(VOLUME_PATH.glob(pattern))
-
-    if not files:
-        print(f"No files found matching pattern: {pattern}")
-        return
-
-    for file_path in files:
-        print(f"Processing file: {file_path.name}")
-        df = pd.read_parquet(file_path)
-        
-        # Add Lineage & Ingestion Metadata
-        df["source_file"] = file_path.name
-        df["source_month"] = pd.to_datetime(df["lpep_pickup_datetime"]).dt.strftime("%Y-%m")
-        df["bronze_ingestion_timestamp"] = datetime.now()
-        df["bronze_ingestion_date"] = datetime.now().date()
-        
-        # Yield dict records to dlt pipeline
-        yield df.to_dict(orient="records")
-
-# Create dlt pipeline targeting Databricks Delta Lake
-pipeline = dlt.pipeline(
-    pipeline_name="green_taxi_ingestion",
-    destination="databricks",
-    dataset_name="nyc_bronze"
-)
-
-# Main execution entry point
-if __name__ == "__main__":
-    # Set selected_month to test specific months (e.g., "2026-03", "2026-04", "2026-05")
-    # Set selected_month=None to process all parquet files in the volume.
-    TEST_MONTH = "2026-03"  
-    
-    print(f"--- Running dlt Ingestion for month: {TEST_MONTH or 'ALL'} ---")
-    load_info = pipeline.run(green_taxi_resource(selected_month=TEST_MONTH))
-    print("dlt Load Summary:")
-    print(load_info)
