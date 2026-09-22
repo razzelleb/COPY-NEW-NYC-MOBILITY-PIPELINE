@@ -5,7 +5,7 @@ from pathlib import Path
 BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data/"
 
 # Months to download
-MONTHS = ["2026-03", "2026-04", "2026-05"]
+MONTHS = ["2026-03"]
 
 # Databricks Volume path for the raw datasets
 OUTPUT_DIR = Path("/Volumes/nyc/default/nyc-mobility-volume/green_taxi/")
