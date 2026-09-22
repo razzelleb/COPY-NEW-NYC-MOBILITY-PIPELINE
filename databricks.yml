@@ -1,16 +1,19 @@
 bundle:
-  name: nyc-mobility-pipeline
+  name: COPY-NEW-NYC-MOBILITY-PIPELINE
 
 include:
   - resources/*.yml
 
 targets:
   dev:
+    default: true
     mode: development
+    workspace:
+      profile: DEFAULT
+      root_path: /Workspace/Users/razzelle.boreros@ftwfoundation.org/.bundle/COPY-NEW-NYC-MOBILITY-PIPELINE/dev
 
   prod:
     mode: production
     workspace:
-      profile: sara.celadina@ftwfoundation.org
-      root_path: /Workspace/Users/sara.celadina@ftwfoundation.org/.bundle/${bundle.name}/${bundle.target}
-    
+      profile: DEFAULT
+      root_path: /Workspace/Users/razzelle.boreros@ftwfoundation.org/.bundle/COPY-NEW-NYC-MOBILITY-PIPELINE/prod
