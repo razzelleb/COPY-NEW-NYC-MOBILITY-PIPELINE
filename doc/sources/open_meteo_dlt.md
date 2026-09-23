@@ -2,28 +2,33 @@
 
 ## Overview
 
-This document covers an alternative Bronze ingestion path for the Open-Meteo
-weather source, built with **dlt** (data load tool) instead of the existing
-manual `download_open_meteo.py` + `ingest_open_meteo.py` scripts, built as a
-non-destructive parallel evaluation track alongside the original pipeline.
+This document covers the replacement of the Open-Meteo weather ingestion path
+with **dlt** (data load tool), in place of the previous manual
+`download_open_meteo.py` + `ingest_open_meteo.py` scripts. This is not a
+side-by-side evaluation track — dlt is now the actual source feeding the
+Gold-layer weather dimension, which `fact_taxi_trip` joins against.
 
 ## Where dlt fits
 
 ```text
-Open-Meteo API → dlt (dlt_ingest_weather.py) → weather_bronze_dlt → clean_weather_dlt → dim_weather_dlt
+Open-Meteo API → dlt (dlt_ingest_weather.py) → weather_bronze_dlt
+    → clean_weather_dlt → dim_weather_dlt → fact_taxi_trip
 ```
 
-This intentionally mirrors the original `download_open_meteo.py`/`ingest_open_meteo.py`
-→ `clean_weather.sql` → `dim_weather.sql` chain, as a separate `_dlt`-suffixed
-path. Nothing about the original pipeline was touched.
+The original `download_open_meteo.py`, `ingest_open_meteo.py`,
+`clean_weather.sql`, and `dim_weather.sql` files and their job tasks have
+been removed from `resources/nyc_mobility_job.yml` — they are no longer part
+of the pipeline. `fact_taxi_trip.sql`'s weather join now targets
+`nyc.nyc_gold.dim_weather_dlt` directly, so `fact_taxi_trip` — and everything
+downstream of it (`taxi_demand`, `weather_demand_trip_behavior`,
+`strongest_mobility_patterns`) — depends on the dlt-based chain.
 
 ## Why dlt was used
 
-The current Open-Meteo ingestion loads data with a full `.mode("overwrite")`
+The previous Open-Meteo ingestion loaded data with a full `.mode("overwrite")`
 every run — the same "batch, not idempotent" problem identified for Green
-Taxi ingestion. dlt was evaluated as an off-the-shelf alternative that handles
-merge-based idempotent loading, schema typing, and lineage tracking without
-hand-written MERGE SQL.
+Taxi ingestion. dlt was adopted because it handles merge-based idempotent
+loading, schema typing, and lineage tracking without hand-written MERGE SQL.
 
 ## Implementation
 
@@ -32,12 +37,17 @@ hand-written MERGE SQL.
   `.dlt/secrets.toml` when run locally, and Databricks Secrets
   (`dbutils.secrets.get("dlt-weather", ...)`) when run inside a job.
 - `src/sql/02_silver_clean/clean_weather_dlt.sql` — same cleaning logic as
-  `clean_weather.sql`, sourced from `weather_bronze_dlt`.
-- `src/sql/03_gold_model/dim_weather_dlt.sql` — same dimension logic as
-  `dim_weather.sql`, sourced from `clean_weather_dlt`.
-- `resources/nyc_mobility_job.yml` — added `dlt_ingest_weather` →
-  `clean_weather_dlt` → `dim_weather_dlt` as new, additive tasks with a
-  separate `dlt_env` environment, with zero changes to existing tasks.
+  the retired `clean_weather.sql`, sourced from `weather_bronze_dlt`.
+- `src/sql/03_gold_model/dim_weather_dlt.sql` — same dimension logic as the
+  retired `dim_weather.sql`, sourced from `clean_weather_dlt`.
+- `src/sql/03_gold_model/fact_taxi_trip.sql` — weather `LEFT JOIN` now
+  targets `nyc.nyc_gold.dim_weather_dlt` instead of the retired
+  `dim_weather`.
+- `resources/nyc_mobility_job.yml` — `dlt_ingest_weather` → `clean_weather_dlt`
+  → `dim_weather_dlt` are real pipeline tasks feeding `fact_taxi_trip`
+  directly (added `dlt_env` environment for the `dlt[databricks]` +
+  `dlt[parquet]` dependencies). The old `download_open_meteo`,
+  `ingest_open_meteo`, `clean_weather`, and `dim_weather` tasks were removed.
 
 ## Test Results
 
@@ -47,32 +57,32 @@ hand-written MERGE SQL.
 | Bronze rerun row count | 2,208 — unchanged |
 | Bronze duplicate `timestamp` count after rerun | 0 |
 | Bronze schema (`DESCRIBE`) | All 7 source fields + 3 lineage fields, plus `_dlt_load_id`, `_dlt_id` |
-| Row count vs. original `weather_bronze` table | 2,208 (matches) |
+| Row count vs. the retired `weather_bronze` table | 2,208 (matched before retirement) |
 | Silver (`clean_weather_dlt`) row count | 2,208 |
 | Gold (`dim_weather_dlt`) row count | 2,208 |
-| Manual reruns of Silver/Gold | Stable, no duplicates |
+| Manual reruns of Bronze/Silver/Gold | Stable, no duplicates |
 
 All manual, local, and SQL-Editor-run checks pass. Idempotency confirmed
 across multiple reruns at every layer.
 
-## Comparison vs. current ingestion
+## Comparison vs. the retired manual ingestion
 
-| Aspect | Current | dlt |
+| Aspect | Previous (retired) | dlt (current) |
 |---|---|---|
 | Idempotency | None — full overwrite every run | Native via `write_disposition="merge"` |
 | Schema | Manually cast | Typed via `columns={...}`, verified via `DESCRIBE` |
 | Lineage | Custom columns only | Custom columns + built-in `_dlt_load_id`/`_dlt_id` |
-| Compute | Requires Spark session | Runs via SQL Warehouse, no Spark needed |
+| Compute | Required a Spark session | Runs via SQL Warehouse, no Spark needed |
 | Dependencies | None | `dlt[databricks]`, `dlt[parquet]`, separate SQL Warehouse token |
 
 ## Evaluation
 
 **Benefits** — Idempotency came for free via `merge` write disposition,
 eliminating hand-written MERGE SQL. Schema and lineage tracking are stronger
-than the current approach with less custom code.
+than the retired approach with less custom code.
 
 **Limitations** — Introduces a second ingestion pattern (SQL Warehouse
-connection vs. Spark) alongside the existing pipeline. Requires managing a
+connection vs. Spark) alongside the rest of the pipeline. Requires managing a
 separate credential (SQL Warehouse token via Databricks Secrets) and, for
 local development, real setup friction (Python/venv, missing `pyarrow`
 dependency hit during testing).
@@ -80,28 +90,34 @@ dependency hit during testing).
 **Complexity vs. payoff** — Open-Meteo is a small, fixed-shape API; most of
 dlt's heavier machinery (pagination, incremental cursors, large-scale schema
 evolution) barely gets exercised here. What was proven is narrower but real:
-merge-based idempotency with no custom code.
+merge-based idempotency with no custom code, now load-bearing for the actual
+fact table.
 
 ## Deployment Status
 
-The full chain was deployed to the `dev` target (`databricks bundle deploy`)
-and the job was triggered end-to-end. All original pipeline tasks succeeded.
-The new `dlt_ingest_weather` task currently fails specifically when run on
+`fact_taxi_trip` now depends on `dim_weather_dlt`, so the dlt chain is
+required, not optional, for the pipeline to fully run. The full chain has
+been deployed and run against a personal `dev` job target. All original
+(non-weather) tasks succeed. `dlt_ingest_weather` currently fails when run on
 **serverless** job compute, with a network error (`Connection refused`)
 reaching the Unity Catalog volume staging endpoint used internally by dlt's
 Databricks destination during file upload. The same script runs successfully
-outside of serverless compute (local machine, confirmed working). This
-appears to be a serverless network egress restriction specific to this
-workspace, not an issue with the ingestion logic itself — it has been flagged
-to the workspace admin for review. `clean_weather_dlt` and `dim_weather_dlt`
-correctly did not run as a result (correct dependency behavior, not a
-separate bug).
+outside of serverless compute (confirmed working locally). This appears to be
+a serverless network egress restriction specific to this workspace, not an
+issue with the ingestion logic — it has been flagged to the workspace admin
+for review.
+
+**This branch should not be merged into `main` / deployed to the shared
+production job until the serverless networking issue is resolved.** Because
+`fact_taxi_trip` now depends on the dlt chain, merging before that fix would
+break `fact_taxi_trip` (and everything downstream of it) in the shared job,
+not just leave a side table stale.
 
 ## Conclusion
 
 The dlt-based ingestion is fully built, tested, and proven idempotent at
-every layer (Bronze, Silver, Gold) through manual and local execution.
-Automated execution via the production job is implemented and deployed, but
-currently blocked by a workspace-level serverless networking restriction
-outside this evaluation's scope to resolve — a known, documented limitation
-rather than an unresolved defect in the implementation.
+every layer (Bronze, Silver, Gold) through manual and local execution, and is
+correctly wired as the pipeline's actual weather source, feeding
+`fact_taxi_trip` directly. The only remaining blocker is a workspace-level
+serverless networking restriction outside this work's scope to resolve —
+a known, documented limitation, not a defect in the implementation.
