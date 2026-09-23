@@ -49,17 +49,6 @@ resources:
             python_file: ../src/sql/00_setup/download_green_taxi.py
 
 
-        - task_key: download_open_meteo
-
-          depends_on:
-            - task_key: init_schemas
-
-          environment_key: default
-
-          spark_python_task:
-            python_file: ../src/sql/00_setup/download_open_meteo.py
-
-
         - task_key: download_taxi_zones
 
           depends_on:
@@ -84,17 +73,6 @@ resources:
 
           spark_python_task:
             python_file: ../src/sql/01_bronze_ingest/ingest_green_taxi.py
-
-
-        - task_key: ingest_open_meteo
-
-          depends_on:
-            - task_key: download_open_meteo
-
-          environment_key: default
-
-          spark_python_task:
-            python_file: ../src/sql/01_bronze_ingest/ingest_open_meteo.py
 
 
         - task_key: ingest_taxi_zones
@@ -134,17 +112,6 @@ resources:
             warehouse_id: 0a4e428755b887d4
 
 
-        - task_key: clean_weather
-
-          depends_on:
-            - task_key: ingest_open_meteo
-
-          sql_task:
-            file:
-              path: ../src/sql/02_silver_clean/clean_weather.sql
-            warehouse_id: 0a4e428755b887d4
-
-
         # ==========================================
         # 03 - GOLD MODEL
         # ==========================================
@@ -171,24 +138,13 @@ resources:
             warehouse_id: 0a4e428755b887d4
 
 
-        - task_key: dim_weather
-
-          depends_on:
-            - task_key: clean_weather
-
-          sql_task:
-            file:
-              path: ../src/sql/03_gold_model/dim_weather.sql
-            warehouse_id: 0a4e428755b887d4
-
-
         - task_key: fact_taxi_trip
 
           depends_on:
             - task_key: clean_green_taxi
             - task_key: dim_datetime
             - task_key: dim_location
-            - task_key: dim_weather
+            - task_key: dim_weather_dlt
 
           sql_task:
             file:
@@ -234,8 +190,9 @@ resources:
 
 
         # ==========================================
-        # EVALUATION TRACK - dlt-based weather ingestion
-        # (parallel to the existing open-meteo chain, does not feed fact_taxi_trip)
+        # 02/03 - WEATHER (dlt-based ingestion)
+        # Replaces the original download_open_meteo/ingest_open_meteo/
+        # clean_weather/dim_weather chain. Feeds fact_taxi_trip via dim_weather_dlt.
         # ==========================================
 
         - task_key: dlt_ingest_weather
