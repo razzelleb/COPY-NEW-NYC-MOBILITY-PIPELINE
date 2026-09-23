@@ -171,8 +171,9 @@ Green Taxi data is provided as Parquet files, Taxi Zone data as CSV, and weather
 2. Source downloads
 3. Bronze ingestion
 4. Silver transformation
-5. Gold modeling
-6. Analytics
+5. DQ Gate (validates Silver output before Gold proceeds)
+6. Gold modeling
+7. Analytics
 ```
 
 DQ checks currently exist as separate scripts and are run manually —
