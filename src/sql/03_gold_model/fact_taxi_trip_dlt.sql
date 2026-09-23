@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS nyc.nyc_gold.fact_taxi_trip (
+CREATE TABLE IF NOT EXISTS nyc.nyc_gold.fact_taxi_trip_dlt (
     trip_key BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
     vendor_id INT,
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS nyc.nyc_gold.fact_taxi_trip (
     dropoff_datetime_key BIGINT,   -- FK -> dim_datetime.datetime_key
     pickup_location_key BIGINT,    -- FK -> dim_location.location_key
     dropoff_location_key BIGINT,   -- FK -> dim_location.location_key
-    weather_key BIGINT,            -- FK -> dim_weather.weather_key
+    weather_key BIGINT,            -- FK -> dim_weather_dlt.weather_key
 
     -- Kept for MERGE matching / duration calc — NOT surrogate keys,
     -- but the actual values that distinguish one trip from another.
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS nyc.nyc_gold.fact_taxi_trip (
     gold_processed_date DATE
 );
 
-MERGE INTO nyc.nyc_gold.fact_taxi_trip AS target
+MERGE INTO nyc.nyc_gold.fact_taxi_trip_dlt AS target
 USING (
     SELECT
         s.VendorID AS vendor_id,
@@ -86,7 +86,7 @@ USING (
     INNER JOIN nyc.nyc_gold.dim_location AS dl_do
         ON s.DOLocationID = dl_do.location_id
 
-    LEFT JOIN nyc.nyc_gold.dim_weather AS dw
+    LEFT JOIN nyc.nyc_gold.dim_weather_dlt AS dw
         ON date_trunc('hour', s.lpep_pickup_datetime) = dw.weather_datetime
 
 ) AS source

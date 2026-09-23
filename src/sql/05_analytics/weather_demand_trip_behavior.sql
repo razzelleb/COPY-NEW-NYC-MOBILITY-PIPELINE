@@ -1,7 +1,7 @@
 -- BUSINESS QUESTION: How does weather affect taxi demand and trip behavior?
 -- Standalone SELECT queries only - no CREATE TABLE / CREATE VIEW, no new schema.
 -- Each query below is self-contained (own CTE) so it can be pasted individually into a dashboard widget.
--- SOURCE: fact_taxi_trip (1 row/trip) LEFT JOIN dim_weather (1 row/hour) via weather_key.
+-- SOURCE: fact_taxi_trip_dlt (1 row/trip) LEFT JOIN dim_weather_dlt (1 row/hour) via weather_key.
 
 
 -- =====================================================================
@@ -14,8 +14,8 @@ WITH trip_weather AS (
         f.tip_amount, f.total_amount, f.passenger_count, f.lpep_pickup_datetime,
         COALESCE(w.weather_condition, 'No Weather Data') AS weather_condition,
         w.weather_key, w.temperature_2m, w.precipitation, w.snowfall, w.wind_speed_10m
-    FROM nyc.nyc_gold.fact_taxi_trip AS f
-    LEFT JOIN nyc.nyc_gold.dim_weather AS w ON f.weather_key = w.weather_key
+    FROM nyc.nyc_gold.fact_taxi_trip_dlt AS f
+    LEFT JOIN nyc.nyc_gold.dim_weather_dlt AS w ON f.weather_key = w.weather_key
     WHERE f.trip_distance BETWEEN 0 AND 100
       AND f.trip_duration_minutes BETWEEN 0 AND 180
       AND f.fare_amount BETWEEN 0 AND 250
@@ -54,8 +54,8 @@ WITH trip_weather AS (
             WHEN w.precipitation <= 7.5 THEN 'Moderate (2.5-7.5mm)'
             ELSE 'Heavy (7.5mm+)'
         END AS precipitation_bucket
-    FROM nyc.nyc_gold.fact_taxi_trip AS f
-    LEFT JOIN nyc.nyc_gold.dim_weather AS w ON f.weather_key = w.weather_key
+    FROM nyc.nyc_gold.fact_taxi_trip_dlt AS f
+    LEFT JOIN nyc.nyc_gold.dim_weather_dlt AS w ON f.weather_key = w.weather_key
     WHERE f.trip_distance BETWEEN 0 AND 100
       AND f.trip_duration_minutes BETWEEN 0 AND 180
       AND f.fare_amount BETWEEN 0 AND 250
@@ -95,8 +95,8 @@ WITH trip_weather AS (
             WHEN COALESCE(w.snowfall, 0) > 0 THEN 'Snow'
             ELSE 'No Snow'
         END AS snow_flag
-    FROM nyc.nyc_gold.fact_taxi_trip AS f
-    LEFT JOIN nyc.nyc_gold.dim_weather AS w ON f.weather_key = w.weather_key
+    FROM nyc.nyc_gold.fact_taxi_trip_dlt AS f
+    LEFT JOIN nyc.nyc_gold.dim_weather_dlt AS w ON f.weather_key = w.weather_key
     WHERE f.trip_distance BETWEEN 0 AND 100
       AND f.trip_duration_minutes BETWEEN 0 AND 180
       AND f.fare_amount BETWEEN 0 AND 250
@@ -124,15 +124,15 @@ ORDER BY snow_flag;
 
 WITH trip_date_bounds AS (
     SELECT MIN(lpep_pickup_datetime) AS min_pickup, MAX(lpep_pickup_datetime) AS max_pickup
-    FROM nyc.nyc_gold.fact_taxi_trip
+    FROM nyc.nyc_gold.fact_taxi_trip_dlt
     WHERE lpep_pickup_datetime IS NOT NULL
 ),
 trip_counts AS (
     SELECT
         COALESCE(w.weather_condition, 'No Weather Data') AS weather_condition,
         COUNT(*) AS trip_count
-    FROM nyc.nyc_gold.fact_taxi_trip AS f
-    LEFT JOIN nyc.nyc_gold.dim_weather AS w ON f.weather_key = w.weather_key
+    FROM nyc.nyc_gold.fact_taxi_trip_dlt AS f
+    LEFT JOIN nyc.nyc_gold.dim_weather_dlt AS w ON f.weather_key = w.weather_key
     WHERE f.trip_distance BETWEEN 0 AND 100
       AND f.trip_duration_minutes BETWEEN 0 AND 180
       AND f.fare_amount BETWEEN 0 AND 250
@@ -144,7 +144,7 @@ weather_hours AS (
     SELECT
         COALESCE(w.weather_condition, 'No Weather Data') AS weather_condition,
         COUNT(DISTINCT w.weather_datetime) AS weather_hours
-    FROM nyc.nyc_gold.dim_weather AS w
+    FROM nyc.nyc_gold.dim_weather_dlt AS w
     CROSS JOIN trip_date_bounds AS b
     WHERE w.weather_datetime >= date_trunc('hour', b.min_pickup)
       AND w.weather_datetime <= date_trunc('hour', b.max_pickup)
@@ -168,8 +168,8 @@ WITH trip_weather AS (
     SELECT
         f.trip_distance, f.trip_duration_minutes, f.fare_amount, f.passenger_count, f.lpep_pickup_datetime,
         COALESCE(w.weather_condition, 'No Weather Data') AS weather_condition
-    FROM nyc.nyc_gold.fact_taxi_trip AS f
-    LEFT JOIN nyc.nyc_gold.dim_weather AS w ON f.weather_key = w.weather_key
+    FROM nyc.nyc_gold.fact_taxi_trip_dlt AS f
+    LEFT JOIN nyc.nyc_gold.dim_weather_dlt AS w ON f.weather_key = w.weather_key
     WHERE f.trip_distance BETWEEN 0 AND 100
       AND f.trip_duration_minutes BETWEEN 0 AND 180
       AND f.fare_amount BETWEEN 0 AND 250

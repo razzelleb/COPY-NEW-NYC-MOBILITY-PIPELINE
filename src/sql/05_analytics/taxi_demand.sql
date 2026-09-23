@@ -4,8 +4,8 @@ SELECT
     d.day_name,
     d.hour,
     COUNT(f.trip_key) AS trip_count
-FROM nyc.nyc_gold.fact_taxi_trip f
-JOIN nyc.nyc_gold.dim_datetime d 
+FROM nyc.nyc_gold.fact_taxi_trip_dlt f
+JOIN nyc.nyc_gold.dim_datetime d
     ON f.pickup_datetime_key = d.datetime_key
 GROUP BY 
     d.day_name,
@@ -22,8 +22,8 @@ SELECT
     l.zone,
     l.borough,
     COUNT(*) AS trip_count
-FROM nyc.nyc_gold.fact_taxi_trip f
-JOIN nyc.nyc_gold.dim_location l 
+FROM nyc.nyc_gold.fact_taxi_trip_dlt f
+JOIN nyc.nyc_gold.dim_location l
     ON f.pickup_location_key = l.location_key
 GROUP BY 
     l.zone, 
