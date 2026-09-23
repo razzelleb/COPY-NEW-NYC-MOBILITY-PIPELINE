@@ -65,6 +65,35 @@ jobs:
       - name: Run tests
         run: pytest tests/ -v
 
+  ingest_weather:
+    name: Ingest Open-Meteo weather data (dlt)
+    needs: validate
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dlt
+        run: |
+          python -m pip install --upgrade pip
+          pip install "dlt[databricks]" "dlt[parquet]"
+
+      - name: Run dlt weather ingestion
+        env:
+          DESTINATION__DATABRICKS__CREDENTIALS__SERVER_HOSTNAME: ${{ secrets.DATABRICKS_HOST }}
+          DESTINATION__DATABRICKS__CREDENTIALS__HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+          DESTINATION__DATABRICKS__CREDENTIALS__ACCESS_TOKEN: ${{ secrets.DLT_ACCESS_TOKEN }}
+          DESTINATION__DATABRICKS__CREDENTIALS__CATALOG: nyc
+        run: python src/sql/01_bronze_ingest/dlt_ingest_weather.py
+
   deploy-dev:
     name: Deploy to DEV
     needs: validate
