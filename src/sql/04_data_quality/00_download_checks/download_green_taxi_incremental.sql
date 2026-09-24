@@ -2,12 +2,8 @@
 -- DATA QUALITY CHECK: Raw Downloaded Green Taxi Parquet Files
 -- =====================================================================
 -- Evaluates raw downloaded files in the Volume prior to Bronze loading.
--- Order:
---   1. Total Downloaded Row Count (Overall)
---   2. Duplicate Records Check
---   3. Other Quality Checks (Nulls, Non-essential fields)
---   4. Monthly Row Count by Source Month (File Lineage) -> PASS
---   5. Monthly Row Count by Pickup Date (Taximeter Timestamp) -> PASS
+-- Thresholds: Composite Key & Exact Duplicates <= 1.0% WARN, > 1.0% FAIL
+--             Mandatory Key Field Nulls <= 2.0% WARN, > 2.0% FAIL
 -- =====================================================================
 
 WITH raw_parquet AS (
@@ -25,12 +21,11 @@ WITH raw_parquet AS (
         ) AS pickup_month
     FROM parquet.`/Volumes/nyc/default/nyc-mobility-volume/green_taxi/*.parquet`
 ),
-
 raw_metrics AS (
     SELECT 
         COUNT(*) AS total_records,
 
-        -- Duplicate records check on 7-column composite natural key
+        -- 1. Duplicate composite key check (7-columns)
         COUNT(*) - COUNT(DISTINCT STRUCT(
             VendorID,
             lpep_pickup_datetime,
@@ -39,39 +34,37 @@ raw_metrics AS (
             DOLocationID,
             trip_distance,
             total_amount
-        )) AS duplicate_trip_count,
+        )) AS duplicate_composite_key_count,
 
-        -- Essential fields null check
+        -- 2. Exact duplicate rows (all columns identical)
+        COUNT(*) - COUNT(DISTINCT STRUCT(*)) AS exact_duplicate_rows_count,
+
+        -- 3. Null count for mandatory key fields (7-columns)
         COUNT_IF(
-            lpep_pickup_datetime IS NULL
+            VendorID IS NULL
+            OR lpep_pickup_datetime IS NULL
             OR lpep_dropoff_datetime IS NULL
             OR PULocationID IS NULL
             OR DOLocationID IS NULL
-        ) AS missing_essential_fields_count,
-
-        -- Non-essential column null check (ehail_fee)
-        COUNT_IF(ehail_fee IS NULL) AS null_ehail_fee_count
+            OR trip_distance IS NULL
+            OR total_amount IS NULL
+        ) AS null_mandatory_key_fields_count
     FROM raw_parquet
 ),
-
 monthly_source_counts AS (
-    -- Group by File Source Month
     SELECT 
         source_month,
         COUNT(*) AS month_records
     FROM raw_parquet
     GROUP BY source_month
 ),
-
 monthly_pickup_counts AS (
-    -- Group by Pickup Date Timestamp Month
     SELECT 
         pickup_month,
         COUNT(*) AS month_records
     FROM raw_parquet
     GROUP BY pickup_month
 ),
-
 dq_results AS (
     -- 1. TOTAL DOWNLOADED ROW COUNT
     SELECT 
@@ -86,41 +79,41 @@ dq_results AS (
 
     UNION ALL
 
-    -- 2. DUPLICATE RECORDS CHECK
+    -- 2. DUPLICATE COMPOSITE KEY CHECK (7-COLUMNS)
     SELECT 
         2,
-        'Duplicate Records Check',
+        'Duplicate composite key check (7-columns)',
         'UNIQUE',
         total_records,
-        duplicate_trip_count,
-        ROUND((duplicate_trip_count * 100.0) / NULLIF(total_records, 0), 2),
-        'CRITICAL'
+        duplicate_composite_key_count,
+        ROUND((duplicate_composite_key_count * 100.0) / NULLIF(total_records, 0), 2),
+        'COMPOSITE_KEY'
     FROM raw_metrics
 
     UNION ALL
 
-    -- 3. MISSING ESSENTIAL FIELDS NULL CHECK
+    -- 3. EXACT DUPLICATE ROWS
     SELECT 
         3,
-        'Missing Essential Fields Null Check',
-        'NULL',
+        'Exact duplicate rows',
+        'UNIQUE',
         total_records,
-        missing_essential_fields_count,
-        ROUND((missing_essential_fields_count * 100.0) / NULLIF(total_records, 0), 2),
-        'CRITICAL'
+        exact_duplicate_rows_count,
+        ROUND((exact_duplicate_rows_count * 100.0) / NULLIF(total_records, 0), 2),
+        'COMPOSITE_KEY'
     FROM raw_metrics
 
     UNION ALL
 
-    -- 4. NON-ESSENTIAL COLUMN NULL CHECK (ehail_fee)
+    -- 4. NULL COUNT FOR MANDATORY KEY FIELDS (7-COLUMNS)
     SELECT 
         4,
-        'Non-Essential Column Null Check (ehail_fee)',
+        'Null count for mandatory key fields (7-columns)',
         'NULL',
         total_records,
-        null_ehail_fee_count,
-        ROUND((null_ehail_fee_count * 100.0) / NULLIF(total_records, 0), 2),
-        'NON_ESSENTIAL'
+        null_mandatory_key_fields_count,
+        ROUND((null_mandatory_key_fields_count * 100.0) / NULLIF(total_records, 0), 2),
+        'OTHER_DQ'
     FROM raw_metrics
 
     UNION ALL
@@ -149,7 +142,6 @@ dq_results AS (
         'MONTHLY_COUNT' AS severity
     FROM monthly_pickup_counts
 )
-
 SELECT 
     check_name,
     check_type,
@@ -159,8 +151,10 @@ SELECT
     CASE 
         WHEN severity = 'MONTHLY_COUNT' THEN 'PASS'
         WHEN affected_rows = 0 THEN 'PASS'
-        WHEN severity = 'NON_ESSENTIAL' THEN 'WARN'
-        WHEN failure_pct <= 5.00 THEN 'WARN'
+        WHEN severity = 'COMPOSITE_KEY' AND failure_pct <= 1.00 THEN 'WARN'
+        WHEN severity = 'COMPOSITE_KEY' AND failure_pct > 1.00 THEN 'FAIL'
+        WHEN severity = 'OTHER_DQ' AND failure_pct <= 2.00 THEN 'WARN'
+        WHEN severity = 'OTHER_DQ' AND failure_pct > 2.00 THEN 'FAIL'
         ELSE 'FAIL'
     END AS status
 FROM dq_results

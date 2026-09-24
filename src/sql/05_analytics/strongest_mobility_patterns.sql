@@ -14,7 +14,7 @@ SELECT
 
     ROUND(SUM(f.total_amount), 2) AS total_revenue
 
-FROM nyc.nyc_gold.fact_taxi_trip AS f
+FROM nyc.nyc_gold.fact_taxi_trip_dlt AS f
 
 JOIN nyc.nyc_gold.dim_location AS l
     ON f.PULocationID = l.location_id
@@ -36,7 +36,7 @@ WITH pickup AS (
     SELECT
         PULocationID AS location_id,
         COUNT(*) AS pickup_trips
-    FROM nyc.nyc_gold.fact_taxi_trip
+    FROM nyc.nyc_gold.fact_taxi_trip_dlt
     GROUP BY PULocationID
 
 ),
@@ -46,7 +46,7 @@ dropoff AS (
     SELECT
         DOLocationID AS location_id,
         COUNT(*) AS dropoff_trips
-    FROM nyc.nyc_gold.fact_taxi_trip
+    FROM nyc.nyc_gold.fact_taxi_trip_dlt
     GROUP BY DOLocationID
 
 )

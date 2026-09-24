@@ -1,38 +1,30 @@
 -- =====================================================================
--- DATA QUALITY CHECK: Green Taxi Bronze Delta Table
+-- DATA QUALITY CHECK: Green Taxi Bronze Table
 -- =====================================================================
 -- Evaluates the ingested Bronze table after deduplication and MERGE.
--- Order:
---   1. Total Loaded Row Count (Overall)
---   2. Duplicate Trips Check
---   3. Other Quality Checks (Lineage, Nulls, Duration Logic, Ranges)
---   4. Monthly Row Count by Source File Month (File Lineage) -> PASS
---   5. Monthly Row Count by Pickup Date Month (Taximeter Timestamp) -> PASS
+-- Thresholds: Composite Key & Exact Duplicates <= 1.0% WARN, > 1.0% FAIL
+--             Other DQ Areas (Nulls, Lineage, Range) <= 2.0% WARN, > 2.0% FAIL
 -- =====================================================================
 
 WITH raw_data AS (
     SELECT 
         *,
-        -- Source File Month: Extracted directly from the source_file column where the row originated
         COALESCE(
             REGEXP_EXTRACT(source_file, '(\\d{4}-\\d{2})', 1),
             source_month,
             'UNKNOWN'
         ) AS source_file_month,
-
-        -- Pickup Date Month: Extracted from trip pickup timestamp
         COALESCE(
             DATE_FORMAT(lpep_pickup_datetime, 'yyyy-MM'),
             'UNKNOWN'
         ) AS pickup_date_month
     FROM nyc.nyc_bronze.green_taxi_bronze
 ),
-
 raw_metrics AS (
     SELECT 
         COUNT(*) AS total_records,
 
-        -- Duplicate trips check on 7-column composite natural key
+        -- 1. Duplicate composite key check (7-columns)
         COUNT(*) - COUNT(DISTINCT STRUCT(
             VendorID,
             lpep_pickup_datetime,
@@ -41,9 +33,12 @@ raw_metrics AS (
             DOLocationID,
             trip_distance,
             total_amount
-        )) AS duplicate_trip_count,
+        )) AS duplicate_composite_key_count,
 
-        -- Audit lineage metadata null check
+        -- 2. Exact duplicate rows (all columns identical)
+        COUNT(*) - COUNT(DISTINCT STRUCT(*)) AS exact_duplicate_rows_count,
+
+        -- 3. Audit lineage population check
         COUNT_IF(
             source_file IS NULL 
             OR source_month IS NULL 
@@ -51,43 +46,40 @@ raw_metrics AS (
             OR bronze_ingestion_date IS NULL
         ) AS missing_lineage_count,
 
-        -- Mandatory key fields null check
+        -- 4. Null count for mandatory key fields (7-columns)
         COUNT_IF(
-            lpep_pickup_datetime IS NULL
+            VendorID IS NULL
+            OR lpep_pickup_datetime IS NULL
             OR lpep_dropoff_datetime IS NULL
             OR PULocationID IS NULL
             OR DOLocationID IS NULL
-        ) AS missing_mandatory_keys_count,
+            OR trip_distance IS NULL
+            OR total_amount IS NULL
+        ) AS null_mandatory_key_fields_count,
 
-        -- Trip duration logic check
-        COUNT_IF(lpep_dropoff_datetime < lpep_pickup_datetime) AS invalid_trip_duration_count,
+        -- 5. Non-positive trip distance (distance <= 0)
+        COUNT_IF(trip_distance <= 0) AS non_positive_trip_distance_count,
 
-        -- Value range sanity checks
-        COUNT_IF(trip_distance <= 0) AS invalid_distance_count,
+        -- 6. Negative total amount (amount < 0)
         COUNT_IF(total_amount < 0) AS negative_total_amount_count
     FROM raw_data
 ),
-
 monthly_source_counts AS (
-    -- Group by File Source Batch (Where the row came from)
     SELECT 
         source_file_month,
         COUNT(*) AS month_records
     FROM raw_data
     GROUP BY source_file_month
 ),
-
 monthly_pickup_counts AS (
-    -- Group by Taximeter Pickup Date
     SELECT 
         pickup_date_month,
         COUNT(*) AS month_records
     FROM raw_data
     GROUP BY pickup_date_month
 ),
-
 dq_results AS (
-    -- 1. TOTAL LOADED ROW COUNT (OVERALL)
+    -- 1. TOTAL LOADED ROW COUNT
     SELECT 
         1 AS check_order,
         'Total Loaded Row Count' AS check_name,
@@ -100,54 +92,54 @@ dq_results AS (
 
     UNION ALL
 
-    -- 2. DUPLICATE TRIPS CHECK
+    -- 2. DUPLICATE COMPOSITE KEY CHECK (7-COLUMNS)
     SELECT 
         2,
-        'Duplicate Trips Check',
+        'Duplicate composite key check (7-columns)',
         'UNIQUE',
         total_records,
-        duplicate_trip_count,
-        ROUND((duplicate_trip_count * 100.0) / NULLIF(total_records, 0), 2),
-        'CRITICAL'
+        duplicate_composite_key_count,
+        ROUND((duplicate_composite_key_count * 100.0) / NULLIF(total_records, 0), 2),
+        'COMPOSITE_KEY'
     FROM raw_metrics
 
     UNION ALL
 
-    -- 3. INGESTION AUDIT LINEAGE POPULATION
+    -- 3. EXACT DUPLICATE ROWS
     SELECT 
         3,
-        'Ingestion Audit Lineage Population',
+        'Exact duplicate rows',
+        'UNIQUE',
+        total_records,
+        exact_duplicate_rows_count,
+        ROUND((exact_duplicate_rows_count * 100.0) / NULLIF(total_records, 0), 2),
+        'COMPOSITE_KEY'
+    FROM raw_metrics
+
+    UNION ALL
+
+    -- 4. AUDIT LINEAGE POPULATION
+    SELECT 
+        4,
+        'Audit lineage population',
         'LINEAGE',
         total_records,
         missing_lineage_count,
         ROUND((missing_lineage_count * 100.0) / NULLIF(total_records, 0), 2),
-        'CRITICAL'
+        'OTHER_DQ'
     FROM raw_metrics
 
     UNION ALL
 
-    -- 4. MISSING MANDATORY KEY FIELDS
-    SELECT 
-        4,
-        'Missing Mandatory Key Fields',
-        'NULL',
-        total_records,
-        missing_mandatory_keys_count,
-        ROUND((missing_mandatory_keys_count * 100.0) / NULLIF(total_records, 0), 2),
-        'CRITICAL'
-    FROM raw_metrics
-
-    UNION ALL
-
-    -- 5. INVALID TRIP DURATION
+    -- 5. NULL COUNT FOR MANDATORY KEY FIELDS (7-COLUMNS)
     SELECT 
         5,
-        'Invalid Trip Duration (Dropoff < Pickup)',
-        'LOGIC',
+        'Null count for mandatory key fields (7-columns)',
+        'NULL',
         total_records,
-        invalid_trip_duration_count,
-        ROUND((invalid_trip_duration_count * 100.0) / NULLIF(total_records, 0), 2),
-        'CRITICAL'
+        null_mandatory_key_fields_count,
+        ROUND((null_mandatory_key_fields_count * 100.0) / NULLIF(total_records, 0), 2),
+        'OTHER_DQ'
     FROM raw_metrics
 
     UNION ALL
@@ -155,12 +147,12 @@ dq_results AS (
     -- 6. NON-POSITIVE TRIP DISTANCE
     SELECT 
         6,
-        'Non-Positive Trip Distance',
+        'Non-positive trip distance',
         'RANGE',
         total_records,
-        invalid_distance_count,
-        ROUND((invalid_distance_count * 100.0) / NULLIF(total_records, 0), 2),
-        'CRITICAL'
+        non_positive_trip_distance_count,
+        ROUND((non_positive_trip_distance_count * 100.0) / NULLIF(total_records, 0), 2),
+        'OTHER_DQ'
     FROM raw_metrics
 
     UNION ALL
@@ -168,17 +160,17 @@ dq_results AS (
     -- 7. NEGATIVE TOTAL AMOUNT
     SELECT 
         7,
-        'Negative Total Amount',
+        'Negative total amount',
         'RANGE',
         total_records,
         negative_total_amount_count,
         ROUND((negative_total_amount_count * 100.0) / NULLIF(total_records, 0), 2),
-        'CRITICAL'
+        'OTHER_DQ'
     FROM raw_metrics
 
     UNION ALL
 
-    -- 8. MONTHLY ROW COUNT BY SOURCE FILE MONTH (FILE LINEAGE) -> PASS
+    -- 8. MONTHLY ROW COUNT BY SOURCE FILE MONTH
     SELECT 
         10 + DENSE_RANK() OVER (ORDER BY source_file_month ASC) AS check_order,
         CONCAT('Monthly Row Count by Source File Month (', source_file_month, ')') AS check_name,
@@ -191,7 +183,7 @@ dq_results AS (
 
     UNION ALL
 
-    -- 9. MONTHLY ROW COUNT BY PICKUP DATE MONTH (TAXIMETER TIMESTAMP) -> PASS
+    -- 9. MONTHLY ROW COUNT BY PICKUP DATE MONTH
     SELECT 
         100 + DENSE_RANK() OVER (ORDER BY pickup_date_month ASC) AS check_order,
         CONCAT('Monthly Row Count by Pickup Date Month (', pickup_date_month, ')') AS check_name,
@@ -202,7 +194,6 @@ dq_results AS (
         'MONTHLY_COUNT' AS severity
     FROM monthly_pickup_counts
 )
-
 SELECT 
     check_name,
     check_type,
@@ -212,8 +203,10 @@ SELECT
     CASE 
         WHEN severity = 'MONTHLY_COUNT' THEN 'PASS'
         WHEN affected_rows = 0 THEN 'PASS'
-        WHEN severity = 'NON_ESSENTIAL' THEN 'WARN'
-        WHEN failure_pct <= 5.00 THEN 'WARN'
+        WHEN severity = 'COMPOSITE_KEY' AND failure_pct <= 1.00 THEN 'WARN'
+        WHEN severity = 'COMPOSITE_KEY' AND failure_pct > 1.00 THEN 'FAIL'
+        WHEN severity = 'OTHER_DQ' AND failure_pct <= 2.00 THEN 'WARN'
+        WHEN severity = 'OTHER_DQ' AND failure_pct > 2.00 THEN 'FAIL'
         ELSE 'FAIL'
     END AS status
 FROM dq_results
