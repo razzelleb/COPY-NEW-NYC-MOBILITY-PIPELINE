@@ -77,7 +77,11 @@ reused a stale load ID — caught and confirmed against a truly new run).
   `primary_key="timestamp"`, `write_disposition="merge"`. Credentials via
   local `.dlt/secrets.toml` for local runs, or env vars
   (`DESTINATION__DATABRICKS__CREDENTIALS__*`) supplied by GitHub Actions
-  secrets in CI.
+  secrets in CI. Date range is **dynamic**, not hardcoded — `TARGET_MONTH =
+  get_previous_month()` mirrors the same logic Green Taxi uses, so the
+  ingested window automatically shifts to "last month" on every run without
+  a code change. (Added per PR review feedback; originally hardcoded to
+  March–May 2026 for initial testing.)
 - `src/sql/02_silver_clean/clean_weather_dlt.sql` — sourced from
   `weather_bronze_dlt`; runs as a Databricks Job task, trusting that
   GitHub Actions has already populated Bronze before the job runs.
@@ -100,6 +104,9 @@ reused a stale load ID — caught and confirmed against a truly new run).
 
 ## Test Results
 
+Original testing used a fixed March–May 2026 range (before the date range
+became dynamic — see Implementation above):
+
 | Check | Result |
 |---|---|
 | Bronze initial load row count | 2,208 |
@@ -111,8 +118,17 @@ reused a stale load ID — caught and confirmed against a truly new run).
 | GitHub Actions run — fresh load ID confirmed | ✅ via `_dlt_loads` table, distinct `load_id`/`inserted_at` per run |
 | GitHub Actions run — end-to-end success | ✅ (56s total run time on a clean pass) |
 
+**After switching to the dynamic `TARGET_MONTH` range**: rerunning against
+the live table (which already held the 2,208 March–May rows) correctly
+**added** August 2026 (`TARGET_MONTH` resolved to "2026-08" at time of
+testing) as new rows rather than replacing anything — count went from 2,208
+to **2,952**, exactly matching 2,208 + (31 days × 24 hours) = 2,208 + 744.
+Confirms the merge logic and the new dynamic date range both work correctly
+together.
+
 Idempotency confirmed across many reruns, locally, in Databricks SQL Editor,
-and via GitHub Actions — row counts stay stable, no duplicates.
+and via GitHub Actions — reruns of the *same* month stay stable with no
+duplicates; a new month correctly appends rather than overwriting.
 
 ## Comparison vs. the retired manual ingestion
 

@@ -1,4 +1,5 @@
 import os
+from datetime import date, timedelta
 
 import dlt
 import requests
@@ -26,8 +27,33 @@ BASE_URL = "https://archive-api.open-meteo.com/v1/archive"
 
 LATITUDE = 40.7128
 LONGITUDE = -74.0060
-START_DATE = "2026-03-01"
-END_DATE = "2026-05-31"
+
+
+def get_previous_month():
+    # Same TARGET_MONTH logic as Green Taxi, so both monthly sources stay
+    # aligned without needing a code change each month.
+    first_of_current_month = date.today().replace(day=1)
+    previous_month = first_of_current_month - timedelta(days=1)
+    return previous_month.strftime("%Y-%m")
+
+
+def get_month_date_range(target_month):
+    year, month = map(int, target_month.split("-"))
+
+    start_date = date(year, month, 1)
+
+    if month == 12:
+        next_month = date(year + 1, 1, 1)
+    else:
+        next_month = date(year, month + 1, 1)
+
+    end_date = next_month - timedelta(days=1)
+
+    return start_date.isoformat(), end_date.isoformat()
+
+
+TARGET_MONTH = get_previous_month()
+START_DATE, END_DATE = get_month_date_range(TARGET_MONTH)
 
 HOURLY_FIELDS = [
     "temperature_2m",
