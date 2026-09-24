@@ -168,16 +168,27 @@ Green Taxi data is provided as Parquet files, Taxi Zone data as CSV, and weather
 
 ```text
 1. Setup
-2. Source Inspection
-3. Bronze Ingestion
-4. Bronze Validation
-5. Silver Transformation
-6. Silver Validation
-7. Gold Modeling
-8. Gold Validation
-9. Analytics
-10. Analytics Validation
+2. Source downloads
+3. Bronze ingestion
+4. Silver transformation
+5. DQ Gate (validates Silver output before Gold proceeds)
+6. Gold modeling
+7. Analytics
 ```
+
+DQ checks currently exist as separate scripts and are run manually —
+they are not yet automated tasks in the deployed job. See
+`docs/monitoring.md` and `docs/runbook.md`.
+
+## Team Responsibilities
+
+| Person | Primary ownership |
+|---|---|
+| Razz | Green Taxi incremental/idempotent ingestion |
+| Maeve | Open-Meteo / dlt evaluation |
+| Sara | DQ checks, orchestration, DQ gates, recovery |
+| Yanna | CI/CD and deployment |
+| Tricia | Monitoring, governance, lineage, runbook |
 
 ## Decisions
 
@@ -203,7 +214,6 @@ Validation checks are applied at every layer of the pipeline to identify issues 
 * Analytics layer checks ensure the final output aligns with business rules, maintains the correct analytical grain, and properly handles null values.
   
 ---
-
 # Documentation
 
 Additional project documentation is available in the `docs/` directory.
@@ -213,6 +223,9 @@ Additional project documentation is available in the `docs/` directory.
 | [`architecture.md`](docs/architecture.md) | Pipeline architecture and data flow |
 | [`data-model.md`](docs/data-model.md) | Gold-layer star schema and table design |
 | [`decisions.md`](docs/decisions.md) | Key technical and data-modeling decisions |
+| [`governance.md`](docs/governance.md) | Ownership, lineage, and naming conventions |
+| [`monitoring.md`](docs/monitoring.md) | Pipeline health checks and DQ rules |
+| [`runbook.md`](docs/runbook.md) | Recovery steps when something fails |
 
 ---
 
@@ -231,5 +244,3 @@ The completed pipeline provides:
 * Geographic analysis showing differences in taxi activity across **NYC boroughs and locations**.
 * Weather analysis comparing taxi demand and trip characteristics under different **weather and precipitation conditions**.
 * A Databricks dashboard that converts the Gold-layer data into business-oriented visualizations.
-
-CD TEST REAL
