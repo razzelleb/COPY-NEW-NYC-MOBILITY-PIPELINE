@@ -94,6 +94,19 @@ jobs:
           DESTINATION__DATABRICKS__CREDENTIALS__CATALOG: nyc
         run: python src/sql/01_bronze_ingest/dlt_ingest_weather.py
 
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Trigger Databricks job run
+        # Only runs if the ingestion step above succeeded — GitHub Actions
+        # skips remaining steps in a job by default after a failure, so
+        # clean_weather_dlt/dim_weather_dlt/fact_taxi_trip_dlt never run
+        # against stale or missing Bronze data.
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: databricks jobs run-now 642225294826280
+
   deploy-dev:
     name: Deploy to DEV
     needs: validate
