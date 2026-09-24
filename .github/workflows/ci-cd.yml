@@ -105,7 +105,7 @@ jobs:
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-        run: databricks jobs run-now 642225294826280
+        run: databricks jobs run-now 642225294826280 --target dev
 
   deploy-dev:
     name: Deploy to DEV
