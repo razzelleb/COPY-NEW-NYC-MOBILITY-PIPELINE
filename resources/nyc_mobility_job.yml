@@ -52,24 +52,6 @@ resources:
             alert_on_last_attempt: true
 
 
-        - task_key: download_open_meteo
-
-          depends_on:
-            - task_key: init_schemas
-
-          environment_key: default
-
-          spark_python_task:
-            python_file: ../src/sql/00_setup/download_open_meteo.py
-
-          # RETRY POLICY
-          max_retries: 2
-          min_retry_interval_millis: 30000
-
-          notification_settings:
-            alert_on_last_attempt: true
-
-
         - task_key: download_taxi_zones
 
           depends_on:
@@ -99,24 +81,6 @@ resources:
 
           spark_python_task:
             python_file: ../src/sql/01_bronze_ingest/ingest_green_taxi.py
-
-          # RETRY POLICY
-          max_retries: 2
-          min_retry_interval_millis: 30000
-
-          notification_settings:
-            alert_on_last_attempt: true
-
-
-        - task_key: ingest_open_meteo
-
-          depends_on:
-            - task_key: download_open_meteo
-
-          environment_key: default
-
-          spark_python_task:
-            python_file: ../src/sql/01_bronze_ingest/ingest_open_meteo.py
 
           # RETRY POLICY
           max_retries: 2
@@ -168,17 +132,7 @@ resources:
             warehouse_id: 8414776a94d0039f
 
 
-        - task_key: clean_weather
-
-          depends_on:
-            - task_key: ingest_open_meteo
-
-          sql_task:
-            file:
-              path: ../src/sql/02_silver_clean/clean_weather.sql
-            warehouse_id: 8414776a94d0039f
-
-
+        # ==========================================
         # 03 - GOLD MODEL
 
         - task_key: dim_datetime
@@ -203,28 +157,21 @@ resources:
             warehouse_id: 8414776a94d0039f
 
 
-        - task_key: dim_weather
-
-          depends_on:
-            - task_key: clean_weather
-
-          sql_task:
-            file:
-              path: ../src/sql/03_gold_model/dim_weather.sql
-            warehouse_id: 8414776a94d0039f
-
-
-        - task_key: fact_taxi_trip
+        # fact_taxi_trip_dlt replaces fact_taxi_trip in this job's pipeline —
+        # joined to dim_weather_dlt instead of dim_weather. The original
+        # fact_taxi_trip.sql file/table is untouched and still exists in the
+        # repo, it's just no longer run as part of this job.
+        - task_key: fact_taxi_trip_dlt
 
           depends_on:
             - task_key: clean_green_taxi
             - task_key: dim_datetime
             - task_key: dim_location
-            - task_key: dim_weather
+            - task_key: dim_weather_dlt
 
           sql_task:
             file:
-              path: ../src/sql/03_gold_model/fact_taxi_trip.sql
+              path: ../src/sql/03_gold_model/fact_taxi_trip_dlt.sql
             warehouse_id: 8414776a94d0039f
 
 
@@ -233,7 +180,7 @@ resources:
         - task_key: taxi_demand
 
           depends_on:
-            - task_key: fact_taxi_trip
+            - task_key: fact_taxi_trip_dlt
 
           sql_task:
             file:
@@ -244,7 +191,7 @@ resources:
         - task_key: weather_demand_trip_behavior
 
           depends_on:
-            - task_key: fact_taxi_trip
+            - task_key: fact_taxi_trip_dlt
 
           sql_task:
             file:
@@ -255,9 +202,45 @@ resources:
         - task_key: strongest_mobility_patterns
 
           depends_on:
-            - task_key: fact_taxi_trip
+            - task_key: fact_taxi_trip_dlt
 
           sql_task:
             file:
               path: ../src/sql/05_analytics/strongest_mobility_patterns.sql
+            warehouse_id: 8414776a94d0039f
+
+
+        # ==========================================
+        # 02/03 - WEATHER (dlt-based ingestion)
+        # Replaces the original download_open_meteo/ingest_open_meteo/
+        # clean_weather/dim_weather chain. Feeds fact_taxi_trip via dim_weather_dlt.
+        #
+        # dlt_ingest_weather runs OUTSIDE this job, as a GitHub Actions step
+        # (.github/workflows/ci-cd.yml, "Ingest Open-Meteo weather data (dlt)")
+        # — Databricks Free Edition serverless compute blocks the network call
+        # dlt needs for its staging upload, confirmed across multiple
+        # workspaces/execution contexts. GitHub Actions has normal network
+        # access, so it runs there instead and populates weather_bronze_dlt
+        # before this job runs.
+        # ==========================================
+
+        - task_key: clean_weather_dlt
+
+          depends_on:
+            - task_key: init_schemas
+
+          sql_task:
+            file:
+              path: ../src/sql/02_silver_clean/clean_weather_dlt.sql
+            warehouse_id: 8414776a94d0039f
+
+
+        - task_key: dim_weather_dlt
+
+          depends_on:
+            - task_key: clean_weather_dlt
+
+          sql_task:
+            file:
+              path: ../src/sql/03_gold_model/dim_weather_dlt.sql
             warehouse_id: 8414776a94d0039f
