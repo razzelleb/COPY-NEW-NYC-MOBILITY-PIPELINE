@@ -8,10 +8,6 @@ resources:
       email_notifications:
         on_failure:
           - razzelle.boreros@ftwfoundation.org
-          - sara.celadina@ftwfoundation.org
-          - maeve.lumague@ftwfoundation.org
-          - tricia.taneo@ftwfoundation.org
-          - alleanna.villan@ftwfoundation.org
 
       # SERVERLESS PYTHON ENVIRONMENT
 
