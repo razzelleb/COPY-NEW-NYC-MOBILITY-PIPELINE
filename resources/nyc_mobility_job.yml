@@ -114,7 +114,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/02_silver_clean/clean_green_taxi.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 1884e12ab31db72b
 
 
         - task_key: clean_taxi_zones
@@ -125,7 +125,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/02_silver_clean/clean_taxi_zones.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 1884e12ab31db72b
 
 
         # ==========================================
@@ -139,7 +139,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/03_gold_model/dim_datetime.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 1884e12ab31db72b
 
 
         - task_key: dim_location
@@ -150,7 +150,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/03_gold_model/dim_location.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 1884e12ab31db72b
 
 
         # fact_taxi_trip_dlt replaces fact_taxi_trip in this job's pipeline —
@@ -168,7 +168,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/03_gold_model/fact_taxi_trip_dlt.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 1884e12ab31db72b
 
 
         # 05 - ANALYTICS
@@ -181,7 +181,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/05_analytics/taxi_demand.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 1884e12ab31db72b
 
 
         - task_key: weather_demand_trip_behavior
@@ -192,7 +192,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/05_analytics/weather_demand_trip_behavior.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 1884e12ab31db72b
 
 
         - task_key: strongest_mobility_patterns
@@ -203,7 +203,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/05_analytics/strongest_mobility_patterns.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 1884e12ab31db72b
 
 
         # ==========================================
@@ -228,7 +228,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/02_silver_clean/clean_weather_dlt.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 1884e12ab31db72b
 
 
         - task_key: dim_weather_dlt
@@ -239,4 +239,4 @@ resources:
           sql_task:
             file:
               path: ../src/sql/03_gold_model/dim_weather_dlt.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 1884e12ab31db72b
