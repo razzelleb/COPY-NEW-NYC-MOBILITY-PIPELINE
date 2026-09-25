@@ -129,7 +129,7 @@ USING (
 
             -- Project scope: March through May 2026 only
             AND lpep_pickup_datetime >= '2026-03-01'
-            AND lpep_pickup_datetime < '2026-06-01'
+            AND lpep_pickup_datetime <= current_date()
 
             -- Make sure pickup month matches the source month
             AND date_format(
