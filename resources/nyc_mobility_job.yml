@@ -27,7 +27,7 @@ resources:
           sql_task:
             file:
               path: ../src/sql/00_setup/00_init_schemas.sql
-            warehouse_id: 8414776a94d0039f
+            warehouse_id: 1884e12ab31db72b
 
 
         - task_key: download_green_taxi
