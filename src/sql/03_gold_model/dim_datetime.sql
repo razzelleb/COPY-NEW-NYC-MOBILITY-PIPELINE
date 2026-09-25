@@ -28,7 +28,7 @@ USING (
         SELECT explode(
             sequence(
                 to_timestamp('2026-03-01 00:00:00'), 
-                to_timestamp('2026-05-31 23:00:00'), 
+                current_timestamp(), 
                 interval 1 hour
             )
         ) AS dt
